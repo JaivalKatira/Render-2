@@ -4,23 +4,33 @@ import os
 
 app = Flask(__name__)
 
-# Get database URL from Render environment variable
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Get database URL from Render environment variables
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-conn = psycopg2.connect(DATABASE_URL)
-cursor = conn.cursor()
+if DATABASE_URL is None:
+    raise Exception("DATABASE_URL environment variable not set")
 
-# Create table if not exists
+# Connect to PostgreSQL
+try:
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    cursor = conn.cursor()
+    print("Database connected successfully")
+except Exception as e:
+    print("Database connection failed:", e)
+    raise e
+
+# Create table if it does not exist
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS students (
     id SERIAL PRIMARY KEY,
     name TEXT,
-    age INT,
+    age INTEGER,
     grade TEXT
 )
 """)
 conn.commit()
 
+# Simple UI
 HTML_PAGE = """
 <!DOCTYPE html>
 <html>
@@ -28,6 +38,7 @@ HTML_PAGE = """
 <title>Student Database</title>
 
 <style>
+
 body{
 background:black;
 color:white;
@@ -43,7 +54,7 @@ margin-top:50px;
 
 input,button{
 padding:10px;
-margin:5px;
+margin:8px;
 width:90%;
 border:none;
 border-radius:5px;
@@ -53,6 +64,7 @@ button{
 background:white;
 color:black;
 font-weight:bold;
+cursor:pointer;
 }
 
 .result{
@@ -60,6 +72,7 @@ margin-top:20px;
 padding:15px;
 border:1px solid white;
 }
+
 </style>
 
 </head>
@@ -147,40 +160,44 @@ def home():
 @app.route("/add_student", methods=["POST"])
 def add_student():
 
-    data=request.json
+    data = request.json
+
+    name = data.get("name")
+    age = data.get("age")
+    grade = data.get("grade")
 
     cursor.execute(
-        "INSERT INTO students(name,age,grade) VALUES(%s,%s,%s)",
-        (data["name"],data["age"],data["grade"])
+        "INSERT INTO students(name, age, grade) VALUES(%s,%s,%s)",
+        (name, age, grade)
     )
 
     conn.commit()
 
-    return jsonify({"message":"Student saved successfully"})
+    return jsonify({"message": "Student saved successfully"})
 
 
 @app.route("/get_student")
 def get_student():
 
-    name=request.args.get("name")
+    name = request.args.get("name")
 
     cursor.execute(
-        "SELECT name,age,grade FROM students WHERE name=%s",
+        "SELECT name, age, grade FROM students WHERE name=%s",
         (name,)
     )
 
-    student=cursor.fetchone()
+    student = cursor.fetchone()
 
     if student:
         return jsonify({
-            "name":student[0],
-            "age":student[1],
-            "grade":student[2]
+            "name": student[0],
+            "age": student[1],
+            "grade": student[2]
         })
 
-    return jsonify({"error":"Student not found"})
+    return jsonify({"error": "Student not found"})
 
 
-if __name__=="__main__":
-    app.run(host="0.0.0.0",port=10000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=10000)
 
